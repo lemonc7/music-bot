@@ -20,6 +20,7 @@ const QueueRow = ({
   onRemove,
 }: QueueRowProps) => {
   const addedBy = useUserName(item.invokerUserId);
+  const artists = item.artists.join(" / ");
 
   return (
     <li className="mb-row">
@@ -38,7 +39,8 @@ const QueueRow = ({
       </div>
 
       <div>
-        <div className="mb-row-label">{item.label}</div>
+        <div className="mb-row-label">{item.title}</div>
+        {artists ? <div className="mb-row-meta">{artists}</div> : null}
         {addedBy ? <div className="mb-row-meta">Added by {addedBy}</div> : null}
       </div>
 

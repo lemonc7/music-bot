@@ -1,0 +1,121 @@
+name: Build and release plugin
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: plugin-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out plugin
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check out Sharkord
+        uses: actions/checkout@v4
+        with:
+          repository: Sharkord/sharkord
+          path: .ci/sharkord
+
+      - name: Check out plugin builder
+        uses: actions/checkout@v4
+        with:
+          repository: Sharkord/plugin-builder
+          path: .ci/plugin-builder
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Validate release version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          bun -e '
+            const tag = process.env.GITHUB_REF_NAME.replace(/^v/, "");
+            const pkg = await Bun.file("package.json").json();
+            const manifest = await Bun.file("manifest.json").json();
+            if (pkg.version !== tag || manifest.version !== tag) {
+              console.error(`Tag v${tag}, package ${pkg.version}, and manifest ${manifest.version} must match.`);
+              process.exit(1);
+            }
+          '
+
+      - name: Link Sharkord plugin SDK
+        working-directory: .ci/sharkord
+        run: |
+          bun install --frozen-lockfile
+          cd packages/plugin-sdk
+          bun link
+
+      - name: Link plugin builder
+        working-directory: .ci/plugin-builder
+        run: |
+          bun install --frozen-lockfile
+          bun link
+
+      - name: Install plugin dependencies
+        run: |
+          bun install --frozen-lockfile
+          bun link @sharkord/plugin-sdk
+          bun link @sharkord/plugin-builder
+
+      - name: Build plugin
+        run: bun run build
+
+      - name: Validate plugin bundle
+        run: |
+          test -f dist/music-bot/manifest.json
+          test -f dist/music-bot/server/index.js
+          test -f dist/music-bot/client/index.js
+
+      - name: Package plugin
+        id: package
+        run: |
+          asset_name="music-bot-${GITHUB_REF_NAME}.zip"
+          cd dist
+          zip -r "../${asset_name}" music-bot
+          cd ..
+          sha256sum "${asset_name}" > "${asset_name}.sha256"
+          echo "asset_name=${asset_name}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.asset_name }}
+          path: |
+            ${{ steps.package.outputs.asset_name }}
+            ${{ steps.package.outputs.asset_name }}.sha256
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ASSET_NAME: ${{ steps.package.outputs.asset_name }}
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" \
+              "${ASSET_NAME}" \
+              "${ASSET_NAME}.sha256" \
+              --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              "${ASSET_NAME}" \
+              "${ASSET_NAME}.sha256" \
+              --verify-tag \
+              --generate-notes \
+              --title "Music Bot ${GITHUB_REF_NAME}"
+          fi

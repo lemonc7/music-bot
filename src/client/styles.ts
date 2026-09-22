@@ -164,6 +164,27 @@ const CSS = `
 .mb-row:hover .mb-row-remove, .mb-row:focus-within .mb-row-remove { opacity: 1; }
 .mb-row-remove:focus-visible { opacity: 1; }
 
+.mb-results { padding-bottom: 12px; }
+.mb-result {
+  display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 10px;
+  align-items: center; padding: 7px 8px; border-radius: 6px;
+  transition: background 0.15s ease;
+}
+.mb-result:hover, .mb-result:focus-within { background: #1f1f1f; }
+.mb-result-art {
+  width: 42px; height: 42px; display: grid; place-items: center; overflow: hidden;
+  border-radius: 5px; background: #282828; color: #6a6a6a;
+}
+.mb-result-art img { width: 100%; height: 100%; object-fit: cover; }
+.mb-result-copy { min-width: 0; }
+.mb-result-play {
+  display: flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px;
+  border: 0; border-radius: 999px; background: #fff; color: #000;
+  font: inherit; font-size: 11px; font-weight: 700; cursor: pointer;
+}
+.mb-result-play:hover:not(:disabled) { transform: scale(1.04); }
+.mb-result-play:disabled { opacity: 0.4; cursor: not-allowed; }
+
 .mb-note { padding: 0 16px 12px; font-size: 12px; color: #f5a3a3; overflow-wrap: anywhere; }
 .mb-empty { padding: 6px 16px 14px; font-size: 12px; color: #a7a7a7; text-align: center; }
 

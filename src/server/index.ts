@@ -4,27 +4,32 @@ import {
   type PluginContext,
   type UnloadPluginContext,
 } from "@sharkord/plugin-sdk";
-import type { PlayerActionResponse, TSharkord } from "../contract";
+import type {
+  PlayerActionResponse,
+  TSharkord,
+  TuneBoxTrack,
+} from "../contract";
 import {
-  areRequiredBinariesPresent,
-  downloadBinary,
-  ensureRequiredBinaries,
-  isBinaryDownloading,
-  type TBinaryName,
+  downloadFfmpeg,
+  ensureFfmpeg,
+  isFfmpegDownloading,
+  isFfmpegPresent,
 } from "./downloads";
 import { killMusicStream, spawnMusicStream } from "./ffmpeg";
 import { setDataDir } from "./paths";
 import {
   clearAllChannelStates,
-  enqueueSource,
-  formatSourceLabel,
+  enqueueTrack,
+  formatTrackLabel,
   getChannelIds,
   getExistingState,
   getPlayerStateSnapshot,
   getState,
   removeQueueItem,
   takeNextFromQueue,
+  type TPlayableTrack,
 } from "./player-state";
+import { getTuneBoxPreviewUrl, searchTuneBox } from "./tune-box";
 
 type TMusicContext = PluginContext<TSharkord>;
 
@@ -33,11 +38,10 @@ type TCleanupContext = Pick<TMusicContext, "logger"> &
 
 type PlaybackSettings = {
   bitrate: string;
-  proxy?: string;
 };
 
-let binariesReady = false;
-let binariesInitError: Error | null = null;
+let ffmpegReady = false;
+let ffmpegInitError: Error | null = null;
 
 const publishPlayerState = (ctx: TCleanupContext, channelId: number): void => {
   ctx.push?.toAll({ channelId, player: getPlayerStateSnapshot(channelId) });
@@ -81,6 +85,7 @@ const cleanupChannel = (ctx: TCleanupContext, channelId: number): void => {
   state.streamActive = false;
   state.streamStarting = false;
   state.currentSong = null;
+  state.currentArtists = [];
   state.currentInvokerUserId = null;
   state.currentThumbnailUrl = null;
   state.playbackStartedAtEpochMs = null;
@@ -89,36 +94,32 @@ const cleanupChannel = (ctx: TCleanupContext, channelId: number): void => {
   publishPlayerState(ctx, channelId);
 };
 
-const startBinaryBootstrap = (ctx: TMusicContext): void => {
-  binariesReady = false;
-  binariesInitError = null;
+const startFfmpegBootstrap = (ctx: TMusicContext): void => {
+  ffmpegReady = false;
+  ffmpegInitError = null;
 
-  ensureRequiredBinaries(ctx.logger)
+  ensureFfmpeg(ctx.logger)
     .then(() => {
-      binariesReady = true;
-      ctx.logger.log("Required music binaries are ready");
+      ffmpegReady = true;
+      ctx.logger.log("FFmpeg is ready");
     })
     .catch((err: unknown) => {
-      binariesInitError = err instanceof Error ? err : new Error(String(err));
-      ctx.logger.error("Failed to prepare required music binaries", err);
+      ffmpegInitError = err instanceof Error ? err : new Error(String(err));
+      ctx.logger.error("Failed to prepare FFmpeg", err);
     });
 };
 
-const assertStreamingBinariesReady = async (): Promise<void> => {
-  if (binariesInitError) {
-    throw new Error(
-      `Failed to prepare required binaries: ${binariesInitError.message}`,
-    );
+const assertFfmpegReady = async (): Promise<void> => {
+  if (ffmpegInitError) {
+    throw new Error(`Failed to prepare FFmpeg: ${ffmpegInitError.message}`);
   }
 
-  if (binariesReady || (await areRequiredBinariesPresent())) {
-    binariesReady = true;
+  if (ffmpegReady || (await isFfmpegPresent())) {
+    ffmpegReady = true;
     return;
   }
 
-  throw new Error(
-    "Required music binaries are still downloading. Try again in a moment.",
-  );
+  throw new Error("FFmpeg is still downloading. Try again in a moment.");
 };
 
 const requireVoiceChannelId = (
@@ -132,19 +133,6 @@ const requireVoiceChannelId = (
   return channelId;
 };
 
-const normalizePlayableSource = (query: string): string => {
-  const trimmedQuery = query.trim();
-
-  if (!trimmedQuery) {
-    throw new Error("You must provide a search query or URL.");
-  }
-
-  if (!/^https?:\/\//.test(trimmedQuery)) {
-    return `ytsearch:${trimmedQuery}`;
-  }
-
-  return trimmedQuery;
-};
 
 const buildActionResult = (
   ctx: TMusicContext,
@@ -159,7 +147,7 @@ const buildActionResult = (
 const startMusicStream = async (
   ctx: TMusicContext,
   channelId: number,
-  sourceUrl: string,
+  track: TPlayableTrack,
   options: PlaybackSettings,
   invokerUserId: number,
 ): Promise<string> => {
@@ -217,17 +205,16 @@ const startMusicStream = async (
       },
     });
 
-    ctx.logger.log("Final source URL:", sourceUrl);
+    ctx.logger.log("Final source URL:", track.sourceUrl);
 
     const result = await spawnMusicStream({
-      sourceUrl,
+      sourceUrl: track.sourceUrl,
       audioPayloadType: 111,
       audioSsrc,
       rtpHost: ip,
       audioRtpPort: state.audioTransport.tuple.localPort,
       volume: state.volume,
       bitrate: options.bitrate,
-      proxy: options.proxy,
       log: ctx.logger.log,
       error: ctx.logger.error,
       debug: ctx.logger.debug,
@@ -250,12 +237,18 @@ const startMusicStream = async (
       },
     });
 
+    const title = track.title?.trim() || result.title;
+    const artists = track.artists ?? [];
+    const displayTitle = artists.length > 0 ? `${title} — ${artists.join(" / ")}` : title;
+    const thumbnailUrl = track.coverUrl || undefined;
+    const durationSeconds = track.durationSeconds ?? undefined;
+
     state.streamHandle = ctx.voice.createStream({
       key: "music",
       channelId,
-      title: result.title,
+      title: displayTitle,
       avatarUrl: "https://i.imgur.com/uVBNUK9.png",
-      bannerUrl: result.thumbnailUrl,
+      bannerUrl: thumbnailUrl,
       producers: {
         audio: state.audioProducer,
       },
@@ -266,17 +259,18 @@ const startMusicStream = async (
     state.audioProducer.observer.on("close", state.producerCloseHandler);
 
     state.ffmpegProcess = result.process;
-    state.currentSong = result.title;
+    state.currentSong = title;
+    state.currentArtists = artists;
     state.currentInvokerUserId = invokerUserId;
-    state.currentThumbnailUrl = result.thumbnailUrl ?? null;
+    state.currentThumbnailUrl = thumbnailUrl ?? null;
     state.playbackStartedAtEpochMs = Date.now();
-    state.currentTrackDurationSeconds = result.durationSeconds ?? null;
+    state.currentTrackDurationSeconds = durationSeconds ?? null;
     state.streamActive = true;
     state.endAction = "none";
 
     publishPlayerState(ctx, channelId);
 
-    return `Now playing: ${result.title}`;
+    return `Now playing: ${displayTitle}`;
   } catch (err) {
     cleanupChannel(ctx, channelId);
     throw err;
@@ -301,7 +295,7 @@ const playNextInQueue = async (
   return startMusicStream(
     ctx,
     channelId,
-    nextItem.sourceUrl,
+    nextItem.track,
     options,
     nextItem.invokerUserId,
   );
@@ -309,7 +303,7 @@ const playNextInQueue = async (
 
 const onLoad = async (ctx: TMusicContext) => {
   setDataDir(ctx.dataPath);
-  startBinaryBootstrap(ctx);
+  startFfmpegBootstrap(ctx);
 
   ctx.logger.log("Music Bot loaded");
 
@@ -325,19 +319,25 @@ const onLoad = async (ctx: TMusicContext) => {
       type: "string",
       defaultValue: "128k",
     },
+
     {
-      key: "proxy",
-      name: "Proxy URL",
-      description:
-        "Optional proxy URL for YouTube requests (e.g. http://localhost:8080)",
+      key: "tuneBoxBaseUrl",
+      name: "Tune Box Base URL",
+      description: "Tune Box server URL, for example http://tune-box:8080",
       type: "string",
-      defaultValue: "",
+      defaultValue: "http://localhost:8080",
+    },
+    {
+      key: "tuneBoxProvider",
+      name: "Tune Box Provider",
+      description: "Music provider used by Tune Box search",
+      type: "string",
+      defaultValue: "netease",
     },
   ] as const);
 
   const getPlaybackSettings = (): PlaybackSettings => ({
     bitrate: settings.get("bitrate"),
-    proxy: settings.get("proxy"),
   });
 
   ctx.events.on("voice:runtime_closed", ({ channelId }) => {
@@ -358,25 +358,76 @@ const onLoad = async (ctx: TMusicContext) => {
   });
 
   ctx.actions.register({
-    name: "playMusic",
-    description: "Plays a track, or queues it when something is already on",
+    name: "searchTuneBox",
+    description: "Searches music through the configured Tune Box server",
+    requires: Permission.JOIN_VOICE_CHANNELS,
+    executes: async (_invoker, payload) => {
+      const query = payload.query.trim();
+
+      if (!query) {
+        throw new Error("Enter a song or artist to search for.");
+      }
+
+      return searchTuneBox(
+        settings.get("tuneBoxBaseUrl"),
+        settings.get("tuneBoxProvider"),
+        query,
+        payload.page,
+      );
+    },
+  });
+
+  ctx.actions.register({
+    name: "playTuneBoxTrack",
+    description: "Plays or queues a Tune Box search result",
     requires: Permission.JOIN_VOICE_CHANNELS,
     executes: async (invoker, payload) => {
-      await assertStreamingBinariesReady();
+      await assertFfmpegReady();
 
       const channelId = requireVoiceChannelId(
         invoker.currentVoiceChannelId,
         "You must be in a voice channel to play music.",
       );
-      const sourceUrl = normalizePlayableSource(payload.query);
+      const track: TuneBoxTrack = payload.track;
+
+      if (
+        !track ||
+        typeof track.id !== "string" ||
+        typeof track.provider !== "string" ||
+        typeof track.title !== "string" ||
+        !track.id.trim() ||
+        !track.provider.trim() ||
+        !track.title.trim() ||
+        track.id.length > 128 ||
+        track.provider.length > 64 ||
+        track.title.length > 256
+      ) {
+        throw new Error("The selected Tune Box track is invalid.");
+      }
+
+      const artists = Array.isArray(track.artists) ? track.artists : [];
+      const playableTrack: TPlayableTrack = {
+        sourceUrl: getTuneBoxPreviewUrl(settings.get("tuneBoxBaseUrl"), track),
+        title: track.title.trim(),
+        artists: artists
+          .filter(
+            (artist): artist is string =>
+              typeof artist === "string" && artist.trim().length > 0,
+          )
+          .slice(0, 10)
+          .map((artist) => artist.trim().slice(0, 128)),
+        album: track.album,
+        coverUrl: track.coverUrl,
+        durationSeconds: track.durationSeconds,
+      };
       const state = getState(channelId);
 
       if (state.streamActive || state.streamStarting) {
-        const position = enqueueSource(channelId, sourceUrl, invoker.userId);
+        const position = enqueueTrack(channelId, playableTrack, invoker.userId);
 
         return buildActionResult(
           ctx,
-          `Added to queue (#${position}): ${formatSourceLabel(sourceUrl)}`,
+          `Added to queue (#${position}): ${formatTrackLabel(playableTrack)}`,
           channelId,
         );
       }
@@ -384,7 +435,7 @@ const onLoad = async (ctx: TMusicContext) => {
       const message = await startMusicStream(
         ctx,
         channelId,
-        sourceUrl,
+        playableTrack,
         getPlaybackSettings(),
         invoker.userId,
       );
@@ -392,6 +443,7 @@ const onLoad = async (ctx: TMusicContext) => {
       return buildActionResult(ctx, message, channelId);
     },
   });
+
 
   ctx.actions.register({
     name: "removeQueueItem",
@@ -410,7 +462,7 @@ const onLoad = async (ctx: TMusicContext) => {
 
       return buildActionResult(
         ctx,
-        `Removed from queue: ${formatSourceLabel(removedItem.sourceUrl)}`,
+        `Removed from queue: ${formatTrackLabel(removedItem.track)}`,
         channelId,
       );
     },
@@ -421,7 +473,7 @@ const onLoad = async (ctx: TMusicContext) => {
     description: "Skips to the next queued track",
     requires: Permission.JOIN_VOICE_CHANNELS,
     executes: async (invoker) => {
-      await assertStreamingBinariesReady();
+      await assertFfmpegReady();
 
       const channelId = requireVoiceChannelId(
         invoker.currentVoiceChannelId,
@@ -456,7 +508,7 @@ const onLoad = async (ctx: TMusicContext) => {
     description: "Plays a queued track right away",
     requires: Permission.JOIN_VOICE_CHANNELS,
     executes: async (invoker, payload) => {
-      await assertStreamingBinariesReady();
+      await assertFfmpegReady();
 
       const channelId = requireVoiceChannelId(
         invoker.currentVoiceChannelId,
@@ -473,7 +525,7 @@ const onLoad = async (ctx: TMusicContext) => {
         const message = await startMusicStream(
           ctx,
           channelId,
-          selectedItem.sourceUrl,
+          selectedItem.track,
           getPlaybackSettings(),
           selectedItem.invokerUserId,
         );
@@ -487,7 +539,7 @@ const onLoad = async (ctx: TMusicContext) => {
 
       return buildActionResult(
         ctx,
-        `Jumping to: ${formatSourceLabel(selectedItem.sourceUrl)}`,
+        `Jumping to: ${formatTrackLabel(selectedItem.track)}`,
         channelId,
       );
     },
@@ -543,37 +595,28 @@ const onLoad = async (ctx: TMusicContext) => {
     },
   });
 
-  const registerUpdateCommand = (
-    name: "update-ffmpeg" | "update-yt-dlp",
-    binary: TBinaryName,
-  ) =>
-    ctx.commands.register({
-      name,
-      description: `Downloads the latest ${binary} build`,
-      requires: Permission.MANAGE_PLUGINS,
-      executes: async () => {
-        if (isBinaryDownloading(binary)) {
-          return `${binary} is already downloading. Follow it in the plugin logs.`;
-        }
+  ctx.commands.register({
+    name: "update-ffmpeg",
+    description: "Downloads the latest FFmpeg build",
+    requires: Permission.MANAGE_PLUGINS,
+    executes: async () => {
+      if (isFfmpegDownloading()) {
+        return "FFmpeg is already downloading. Follow it in the plugin logs.";
+      }
 
-        downloadBinary(binary, ctx.logger)
-          .then(async () => {
-            ctx.logger.log(`Updated ${binary} to the latest build`);
+      downloadFfmpeg(ctx.logger)
+        .then(async () => {
+          ctx.logger.log("Updated FFmpeg to the latest build");
+          ffmpegInitError = null;
+          ffmpegReady = await isFfmpegPresent();
+        })
+        .catch((err: unknown) =>
+          ctx.logger.error("Failed to update FFmpeg", err),
+        );
 
-            // a manual download is also how you recover from a failed bootstrap
-            binariesInitError = null;
-            binariesReady = await areRequiredBinariesPresent();
-          })
-          .catch((err: unknown) =>
-            ctx.logger.error(`Failed to update ${binary}`, err),
-          );
-
-        return `Downloading the latest ${binary}. Follow it in the plugin logs.`;
-      },
-    });
-
-  registerUpdateCommand("update-ffmpeg", "ffmpeg");
-  registerUpdateCommand("update-yt-dlp", "yt-dlp");
+      return "Downloading the latest FFmpeg. Follow it in the plugin logs.";
+    },
+  });
 };
 
 const onUnload = (ctx: UnloadPluginContext) => {

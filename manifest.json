@@ -2,9 +2,9 @@
   "id": "music-bot",
   "name": "Music Bot",
   "author": "Diogo Martino",
-  "description": "Allows users to stream music to voice channels.",
-  "homepage": "https://github.com/Sharkord/music-bot",
+  "description": "Searches Tune Box and streams music to Sharkord voice channels.",
+  "homepage": "https://github.com/lemonc7/music-bot",
   "logo": "https://i.imgur.com/uVBNUK9.png",
   "sdkVersion": 2,
-  "version": "0.0.3"
+  "version": "0.1.0"
 }

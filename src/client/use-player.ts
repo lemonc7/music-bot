@@ -1,10 +1,15 @@
 import { useCanUseAction, usePush } from "@sharkord/plugin-sdk/client";
 import { useCallback, useEffect, useState } from "react";
-import type { PlayerStateSnapshot, TSharkord } from "../contract";
+import type {
+  PlayerStateSnapshot,
+  TSharkord,
+  TuneBoxTrack,
+} from "../contract";
 import { callAction, useCurrentVoiceChannelId } from "./store";
 
 const EMPTY_PLAYER_STATE: PlayerStateSnapshot = {
   currentSong: null,
+  currentArtists: [],
   currentInvokerUserId: null,
   currentThumbnailUrl: null,
   streamActive: false,
@@ -58,7 +63,9 @@ const usePlayer = () => {
   const currentVoiceChannelId = useCurrentVoiceChannelId();
   // the server checks again on every call; this only keeps the UI honest
   const can = {
-    play: useCanUseAction<TSharkord>("playMusic"),
+
+    search: useCanUseAction<TSharkord>("searchTuneBox"),
+    playTrack: useCanUseAction<TSharkord>("playTuneBoxTrack"),
     skip: useCanUseAction<TSharkord>("nextMusic"),
     stop: useCanUseAction<TSharkord>("stopMusic"),
     volume: useCanUseAction<TSharkord>("setVolume"),
@@ -68,6 +75,8 @@ const usePlayer = () => {
   const [player, setPlayer] = useState(EMPTY_PLAYER_STATE);
   const [error, setError] = useState("");
   const [isBusy, setIsBusy] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<TuneBoxTrack[]>([]);
 
   // the server pushes on every change, so nothing here polls
   usePush<TSharkord>(({ channelId, player: pushedPlayer }) => {
@@ -78,6 +87,7 @@ const usePlayer = () => {
 
   useEffect(() => {
     setError("");
+    setSearchResults([]);
 
     if (!currentVoiceChannelId) {
       setPlayer(EMPTY_PLAYER_STATE);
@@ -119,6 +129,22 @@ const usePlayer = () => {
     [],
   );
 
+  const search = useCallback(async (query: string) => {
+    setIsSearching(true);
+
+    try {
+      const response = await callAction("searchTuneBox", { query });
+
+      setSearchResults(response.tracks);
+      setError("");
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
   const elapsedSeconds = useElapsedSeconds(player);
   const duration = player.currentTrackDurationSeconds;
   const progressPercent =
@@ -131,12 +157,17 @@ const usePlayer = () => {
     elapsedSeconds,
     error,
     isBusy,
+    isSearching,
     isDisconnected: !currentVoiceChannelId,
-    play: (query: string) => run(() => callAction("playMusic", { query })),
+
+    playTrack: (track: TuneBoxTrack) =>
+      run(() => callAction("playTuneBoxTrack", { track })),
     player,
     progressPercent,
     remove: (position: number) =>
       run(() => callAction("removeQueueItem", { position })),
+    search,
+    searchResults,
     jumpTo: (position: number) =>
       run(() => callAction("jumpToQueueItem", { position })),
     skip: () => run(() => callAction("nextMusic")),

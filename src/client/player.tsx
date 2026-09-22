@@ -11,6 +11,7 @@ import {
   VolumeIcon,
 } from "./icons";
 import { Queue } from "./queue";
+import { SearchResults } from "./search-results";
 import { useUserName } from "./store";
 import { panelStyle } from "./styles";
 import { formatDuration, usePlayer } from "./use-player";
@@ -25,11 +26,14 @@ const PlayerPanel = ({ controller }: PlayerPanelProps) => {
     elapsedSeconds,
     error,
     isBusy,
+    isSearching,
     jumpTo,
-    play,
+    playTrack,
     player,
     progressPercent,
     remove,
+    search,
+    searchResults,
     setVolume,
     skip,
     stop,
@@ -39,18 +43,19 @@ const PlayerPanel = ({ controller }: PlayerPanelProps) => {
   const [volume, setVolumeDraft] = useState(player.volume);
 
   const addedBy = useUserName(player.currentInvokerUserId);
+  const currentArtists = player.currentArtists.join(" / ");
 
   useEffect(() => setVolumeDraft(player.volume), [player.volume]);
 
   const isPlaying = player.streamActive;
   const isLoading = player.streamStarting;
-  const canSubmit = query.trim() !== "" && !isBusy && can.play;
+  const canSubmit =
+    query.trim() !== "" && !isSearching && can.search;
 
   const submit = () => {
     if (!canSubmit) return;
 
-    play(query.trim());
-    setQuery("");
+    search(query.trim());
   };
 
   const title = isPlaying
@@ -67,9 +72,9 @@ const PlayerPanel = ({ controller }: PlayerPanelProps) => {
           <input
             className="mb-search-input"
             value={query}
-            placeholder="Search or paste a link"
-            aria-label="Search or paste a link"
-            disabled={!can.play}
+            placeholder="Search Tune Box"
+            aria-label="Search Tune Box"
+            disabled={!can.search}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key !== "Enter") return;
@@ -86,7 +91,7 @@ const PlayerPanel = ({ controller }: PlayerPanelProps) => {
           disabled={!canSubmit}
           onClick={submit}
         >
-          {isPlaying || isLoading ? "Queue" : "Play"}
+          {isSearching ? "Searching" : "Search"}
         </button>
       </div>
 
@@ -109,11 +114,13 @@ const PlayerPanel = ({ controller }: PlayerPanelProps) => {
           </div>
           <div className="mb-title">{title}</div>
           <div className="mb-sub">
-            {!can.play
+            {!can.playTrack
               ? "You cannot control the player"
-              : isPlaying && addedBy
-                ? `Added by ${addedBy}`
-                : "Search above to start the queue"}
+              : isPlaying && currentArtists
+                ? currentArtists
+                : isPlaying && addedBy
+                  ? `Added by ${addedBy}`
+                  : "Search Tune Box to start the queue"}
           </div>
         </div>
       </div>
@@ -178,6 +185,14 @@ const PlayerPanel = ({ controller }: PlayerPanelProps) => {
       </div>
 
       {error ? <div className="mb-note">{error}</div> : null}
+
+      <SearchResults
+        tracks={searchResults}
+        isBusy={isBusy}
+        canPlay={can.playTrack}
+        isPlaying={isPlaying || isLoading}
+        onSelect={playTrack}
+      />
 
       {player.queue.length > 0 ? (
         <Queue

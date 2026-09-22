@@ -8,8 +8,17 @@ import type {
 import type { PlayerQueueEntry, PlayerStateSnapshot } from "../contract";
 import type { TMusicStreamResult } from "./ffmpeg";
 
-type TQueueItem = {
+type TPlayableTrack = {
   sourceUrl: string;
+  title?: string;
+  artists?: string[];
+  album?: string | null;
+  coverUrl?: string | null;
+  durationSeconds?: number | null;
+};
+
+type TQueueItem = {
+  track: TPlayableTrack;
   invokerUserId: number;
 };
 
@@ -22,6 +31,7 @@ type ChannelStreamState = {
   routerCloseHandler: ((...args: unknown[]) => void) | null;
   producerCloseHandler: ((...args: unknown[]) => void) | null;
   currentSong: string | null;
+  currentArtists: string[];
   currentInvokerUserId: number | null;
   currentThumbnailUrl: string | null;
   streamActive: boolean;
@@ -46,6 +56,7 @@ const createInitialState = (): ChannelStreamState => ({
   routerCloseHandler: null,
   producerCloseHandler: null,
   currentSong: null,
+  currentArtists: [],
   currentInvokerUserId: null,
   currentThumbnailUrl: null,
   streamActive: false,
@@ -79,17 +90,25 @@ const formatSourceLabel = (sourceUrl: string): string => {
   return sourceUrl;
 };
 
-const enqueueSource = (
+const formatTrackLabel = (track: TPlayableTrack): string => {
+  const title = track.title?.trim() || formatSourceLabel(track.sourceUrl);
+  const artists = track.artists?.filter(Boolean).join(" / ");
+
+  return artists ? `${title} — ${artists}` : title;
+};
+
+const enqueueTrack = (
   channelId: number,
-  sourceUrl: string,
+  track: TPlayableTrack,
   invokerUserId: number,
 ): number => {
   const state = getState(channelId);
 
-  state.queue.push({ sourceUrl, invokerUserId });
+  state.queue.push({ track, invokerUserId });
 
   return state.queue.length;
 };
+
 
 const takeNextFromQueue = (channelId: number): TQueueItem | null => {
   const state = getState(channelId);
@@ -120,12 +139,15 @@ const removeQueueItem = (
 const buildQueueEntries = (state: ChannelStreamState): PlayerQueueEntry[] =>
   state.queue.map((item, index) => ({
     position: index + 1,
-    label: formatSourceLabel(item.sourceUrl),
+    label: formatTrackLabel(item.track),
+    title: item.track.title?.trim() || formatSourceLabel(item.track.sourceUrl),
+    artists: item.track.artists ?? [],
     invokerUserId: item.invokerUserId,
   }));
 
 const emptyPlayerStateSnapshot = (): PlayerStateSnapshot => ({
   currentSong: null,
+  currentArtists: [],
   currentInvokerUserId: null,
   currentThumbnailUrl: null,
   streamActive: false,
@@ -147,6 +169,7 @@ const getPlayerStateSnapshot = (
 
   return {
     currentSong: state.currentSong,
+    currentArtists: state.currentArtists,
     currentInvokerUserId: state.currentInvokerUserId,
     currentThumbnailUrl: state.currentThumbnailUrl,
     streamActive: state.streamActive,
@@ -168,8 +191,9 @@ export {
   clearAllChannelStates,
   DEFAULT_VOLUME,
   emptyPlayerStateSnapshot,
-  enqueueSource,
+  enqueueTrack,
   formatSourceLabel,
+  formatTrackLabel,
   getChannelIds,
   getExistingState,
   getPlayerStateSnapshot,
@@ -177,4 +201,4 @@ export {
   removeQueueItem,
   takeNextFromQueue,
 };
-export type { ChannelStreamState };
+export type { ChannelStreamState, TPlayableTrack };

@@ -1,21 +1,17 @@
 # Music Bot
 
-Music bot plugin for Sharkord that streams audio from YouTube or direct links
-into a voice channel. Built against **plugin SDK v2**.
+Music bot plugin for Sharkord that searches music through Tune Box and streams
+it into a voice channel. Built against **plugin SDK v2**.
 
 ## Dependencies
 
-The plugin downloads what it needs (yt-dlp and ffmpeg) on first run, into its
-data directory (`<data-dir>/plugin-data/music-bot/bin`). That directory survives
-plugin updates, so the binaries are only fetched once.
-
-yt-dlp comes from the [nightly builds](https://github.com/yt-dlp/yt-dlp-nightly-builds/releases),
-which track YouTube's extractor changes far more closely than the stable
-releases do. Pull a newer one at any time with `/update-yt-dlp`.
+The plugin downloads FFmpeg on first run into its data directory
+(`<data-dir>/plugin-data/music-bot/bin`). That directory survives plugin updates,
+so the binary is only fetched once.
 
 ## Manual Installation
 
-1. Download the latest release from the [Releases](https://github.com/Sharkord/music-bot/releases) page.
+1. Download the latest release from the [Releases](https://github.com/lemonc7/music-bot/releases) page.
 2. Move the `music-bot` folder to your Sharkord plugins directory, typically located at `~/.config/sharkord/plugins`. See: [Data Dir](https://sharkord.com/docs/data-dir).
 
 ## Usage
@@ -23,8 +19,9 @@ releases do. Pull a newer one at any time with `/update-yt-dlp`.
 Open the music player from the note icon in the top bar while you are connected
 to a voice channel:
 
-- **Search or paste a link** — plays it when the channel is idle, queues it when
-  something is already on.
+- **Search Tune Box** — shows matching songs with title, artist, album, and
+  artwork. Selecting a result plays it when the channel is idle or queues it
+  when something is already on.
 - **Stop** — stops playback and clears the channel's playback state.
 - **Skip** — moves to the next queued track.
 - **Volume** — the master level everyone hears. ffmpeg bakes the level in when
@@ -46,19 +43,28 @@ again on every call — the disabled state is UI, not the boundary.
 
 ## Commands
 
-Both require `MANAGE_PLUGINS`, and both answer immediately and keep downloading
-in the background — follow the progress in the plugin's Logs tab.
-
-- `/update-yt-dlp` — fetches the latest nightly yt-dlp build.
-- `/update-ffmpeg` — fetches the latest ffmpeg build.
+`/update-ffmpeg` requires `MANAGE_PLUGINS`. It answers immediately and keeps
+updating in the background; follow progress in the plugin's Logs tab.
 
 The new binary is moved into place once it is fully downloaded, so a failed
 download leaves the working one untouched and playback is not interrupted.
 
+## Tune Box integration
+
+Tune Box must expose `GET /api/v1/music/search` and `GET /api/preview`. The
+matching Tune Box change is included with this plugin integration. Configure a
+URL reachable from the Sharkord server process, not from the browser. For
+Docker deployments this is normally the Tune Box service name, for example
+`http://tune-box:8080`.
+
+The current MVP does not authenticate these endpoints, so keep Tune Box and
+Sharkord on a trusted private network.
+
 ## Settings
 
+- **Tune Box Base URL** — Tune Box server URL (default `http://localhost:8080`).
+- **Tune Box Provider** — provider used for searches (default `netease`).
 - **Bitrate** — the audio bitrate for the stream (default `128k`).
-- **Proxy URL** — optional proxy for YouTube requests.
 
 ## Screenshots
 
@@ -66,15 +72,10 @@ download leaves the working one untouched and playback is not interrupted.
 
 ## Troubleshooting
 
-### Sign in to confirm you're not a bot
-
-Well, turns out this is a bot. If you encounter this issue, you can try the
-following solutions:
-
-1. Run `/update-yt-dlp` — the nightly build usually has the fix within a day.
-2. Use a different IP address by connecting through a VPN or proxy.
-3. Pass your cookies to yt-dlp by writing them to
-   `<data-dir>/plugin-data/music-bot/bin/cookies.txt`.
+If search fails, verify that Sharkord can reach the configured Tune Box URL and
+that `GET /api/v1/music/search` responds. If a result cannot play, test the same
+provider and track ID through Tune Box's `GET /api/preview` endpoint and inspect
+both applications' logs.
 
 ## Development
 

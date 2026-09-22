@@ -3,7 +3,7 @@ import { PLUGIN_SDK_VERSION } from "@sharkord/plugin-sdk";
 
 const result = await publish({
   githubToken: process.env.GITHUB_TOKEN,
-  repo: "Sharkord/music-bot",
+  repo: "lemonc7/music-bot",
   sdkVersion: PLUGIN_SDK_VERSION,
 });
 

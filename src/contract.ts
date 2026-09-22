@@ -1,11 +1,30 @@
+type TuneBoxTrack = {
+  id: string;
+  provider: string;
+  title: string;
+  artists: string[];
+  album: string | null;
+  coverUrl: string | null;
+  durationSeconds: number | null;
+};
+
+type TuneBoxSearchResult = {
+  tracks: TuneBoxTrack[];
+  page: number;
+  total: number;
+};
+
 type PlayerQueueEntry = {
   position: number;
   label: string;
+  title: string;
+  artists: string[];
   invokerUserId: number;
 };
 
 type PlayerStateSnapshot = {
   currentSong: string | null;
+  currentArtists: string[];
   currentInvokerUserId: number | null;
   currentThumbnailUrl: string | null;
   streamActive: boolean;
@@ -27,8 +46,13 @@ type TSharkord = {
       payload: void;
       response: PlayerStateSnapshot;
     };
-    playMusic: {
-      payload: { query: string };
+
+    searchTuneBox: {
+      payload: { query: string; page?: number };
+      response: TuneBoxSearchResult;
+    };
+    playTuneBoxTrack: {
+      payload: { track: TuneBoxTrack };
       response: PlayerActionResponse;
     };
     removeQueueItem: {
@@ -57,10 +81,7 @@ type TSharkord = {
       args: void;
       response: string;
     };
-    "update-yt-dlp": {
-      args: void;
-      response: string;
-    };
+
   };
   push: {
     channelId: number;
@@ -73,4 +94,6 @@ export type {
   PlayerQueueEntry,
   PlayerStateSnapshot,
   TSharkord,
+  TuneBoxSearchResult,
+  TuneBoxTrack,
 };
