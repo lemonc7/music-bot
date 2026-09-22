@@ -53,11 +53,13 @@ jobs:
             }
           '
 
-      - name: Link Sharkord plugin SDK
+      - name: Link Sharkord plugin packages
         working-directory: .ci/sharkord
         run: |
           bun install --frozen-lockfile
           cd packages/plugin-sdk
+          bun link
+          cd ../ui
           bun link
 
       - name: Link plugin builder
@@ -71,6 +73,7 @@ jobs:
           bun install --frozen-lockfile
           bun link @sharkord/plugin-sdk
           bun link @sharkord/plugin-builder
+          bun link @sharkord/ui
 
       - name: Build plugin
         run: bun run build
