@@ -70,18 +70,20 @@ const SearchResults = ({
             </li>
           );
         })}
-      </ul>
 
-      {hasMore ? (
-        <button
-          type="button"
-          className="mb-load-more"
-          disabled={isLoadingMore}
-          onClick={onLoadMore}
-        >
-          {isLoadingMore ? "Loading..." : "Load more"}
-        </button>
-      ) : null}
+        {hasMore ? (
+          <li className="mb-load-more-row">
+            <button
+              type="button"
+              className="mb-load-more"
+              disabled={isLoadingMore}
+              onClick={onLoadMore}
+            >
+              {isLoadingMore ? "Loading..." : "Load more"}
+            </button>
+          </li>
+        ) : null}
+      </ul>
     </div>
   );
 };

@@ -100,7 +100,7 @@ const PlayerPanel = ({ controller }: PlayerPanelProps) => {
           disabled={!canSubmit}
           onClick={submit}
         >
-          {isSearching ? "Searching" : "Search"}
+          {isSearching ? "..." : "Search"}
         </button>
       </div>
 
