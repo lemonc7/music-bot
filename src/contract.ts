@@ -1,3 +1,5 @@
+type TuneBoxProvider = "netease" | "kuwo";
+
 type TuneBoxTrack = {
   id: string;
   provider: string;
@@ -31,7 +33,6 @@ type PlayerStateSnapshot = {
   streamStarting: boolean;
   playbackStartedAtEpochMs: number | null;
   currentTrackDurationSeconds: number | null;
-  volume: number;
   queue: PlayerQueueEntry[];
 };
 
@@ -48,7 +49,7 @@ type TSharkord = {
     };
 
     searchTuneBox: {
-      payload: { query: string; page?: number };
+      payload: { provider: TuneBoxProvider; query: string; page?: number };
       response: TuneBoxSearchResult;
     };
     playTuneBoxTrack: {
@@ -71,10 +72,6 @@ type TSharkord = {
       payload: void;
       response: PlayerActionResponse;
     };
-    setVolume: {
-      payload: { volume: number };
-      response: PlayerActionResponse;
-    };
   };
   commands: {
     "update-ffmpeg": {
@@ -94,6 +91,7 @@ export type {
   PlayerQueueEntry,
   PlayerStateSnapshot,
   TSharkord,
+  TuneBoxProvider,
   TuneBoxSearchResult,
   TuneBoxTrack,
 };

@@ -162,6 +162,7 @@ const startMusicStream = async (
   }
 
   state.streamStarting = true;
+  const streamGeneration = ++state.streamGeneration;
 
   try {
     const router = ctx.voice.getRouter(channelId);
@@ -213,11 +214,21 @@ const startMusicStream = async (
       audioSsrc,
       rtpHost: ip,
       audioRtpPort: state.audioTransport.tuple.localPort,
-      volume: state.volume,
       bitrate: options.bitrate,
       log: ctx.logger.log,
       error: ctx.logger.error,
       debug: ctx.logger.debug,
+      onDuration: (durationSeconds) => {
+        if (
+          state.streamGeneration !== streamGeneration ||
+          (!state.streamStarting && !state.streamActive)
+        ) {
+          return;
+        }
+
+        state.currentTrackDurationSeconds = durationSeconds;
+        publishPlayerState(ctx, channelId);
+      },
       onEnd: () => {
         ctx.logger.log("Music ended in channel", channelId);
 
@@ -264,7 +275,8 @@ const startMusicStream = async (
     state.currentInvokerUserId = invokerUserId;
     state.currentThumbnailUrl = thumbnailUrl ?? null;
     state.playbackStartedAtEpochMs = Date.now();
-    state.currentTrackDurationSeconds = durationSeconds ?? null;
+    state.currentTrackDurationSeconds =
+      durationSeconds ?? state.currentTrackDurationSeconds;
     state.streamActive = true;
     state.endAction = "none";
 
@@ -327,13 +339,6 @@ const onLoad = async (ctx: TMusicContext) => {
       type: "string",
       defaultValue: "http://localhost:8080",
     },
-    {
-      key: "tuneBoxProvider",
-      name: "Tune Box Provider",
-      description: "Music provider used by Tune Box search",
-      type: "string",
-      defaultValue: "netease",
-    },
   ] as const);
 
   const getPlaybackSettings = (): PlaybackSettings => ({
@@ -363,14 +368,19 @@ const onLoad = async (ctx: TMusicContext) => {
     requires: Permission.JOIN_VOICE_CHANNELS,
     executes: async (_invoker, payload) => {
       const query = payload.query.trim();
+      const provider = payload.provider;
 
       if (!query) {
         throw new Error("Enter a song or artist to search for.");
       }
 
+      if (provider !== "netease" && provider !== "kuwo") {
+        throw new Error("Unsupported Tune Box music provider.");
+      }
+
       return searchTuneBox(
         settings.get("tuneBoxBaseUrl"),
-        settings.get("tuneBoxProvider"),
+        provider,
         query,
         payload.page,
       );
@@ -540,34 +550,6 @@ const onLoad = async (ctx: TMusicContext) => {
       return buildActionResult(
         ctx,
         `Jumping to: ${formatTrackLabel(selectedItem.track)}`,
-        channelId,
-      );
-    },
-  });
-
-  ctx.actions.register({
-    name: "setVolume",
-    description: "Sets the channel's master volume, used by the next track",
-    requires: Permission.JOIN_VOICE_CHANNELS,
-    executes: async (invoker, payload) => {
-      const channelId = requireVoiceChannelId(
-        invoker.currentVoiceChannelId,
-        "You must be in a voice channel to change the volume.",
-      );
-
-      if (!Number.isFinite(payload.volume)) {
-        throw new Error("Volume must be a number between 0 and 100.");
-      }
-
-      const volume = Math.min(100, Math.max(0, Math.round(payload.volume)));
-
-      getState(channelId).volume = volume;
-
-      // ffmpeg bakes the volume filter in at spawn time, so the track already
-      // playing keeps the level it started with
-      return buildActionResult(
-        ctx,
-        `Volume set to ${volume}%. It applies from the next track.`,
         channelId,
       );
     },

@@ -38,12 +38,10 @@ type ChannelStreamState = {
   streamStarting: boolean;
   playbackStartedAtEpochMs: number | null;
   currentTrackDurationSeconds: number | null;
-  volume: number;
+  streamGeneration: number;
   queue: TQueueItem[];
   endAction: "none" | "next" | "stop";
 };
-
-const DEFAULT_VOLUME = 50;
 
 const channelStreams = new Map<number, ChannelStreamState>();
 
@@ -63,7 +61,7 @@ const createInitialState = (): ChannelStreamState => ({
   streamStarting: false,
   playbackStartedAtEpochMs: null,
   currentTrackDurationSeconds: null,
-  volume: DEFAULT_VOLUME,
+  streamGeneration: 0,
   queue: [],
   endAction: "none",
 });
@@ -109,7 +107,6 @@ const enqueueTrack = (
   return state.queue.length;
 };
 
-
 const takeNextFromQueue = (channelId: number): TQueueItem | null => {
   const state = getState(channelId);
 
@@ -154,7 +151,6 @@ const emptyPlayerStateSnapshot = (): PlayerStateSnapshot => ({
   streamStarting: false,
   playbackStartedAtEpochMs: null,
   currentTrackDurationSeconds: null,
-  volume: DEFAULT_VOLUME,
   queue: [],
 });
 
@@ -176,7 +172,6 @@ const getPlayerStateSnapshot = (
     streamStarting: state.streamStarting,
     playbackStartedAtEpochMs: state.playbackStartedAtEpochMs,
     currentTrackDurationSeconds: state.currentTrackDurationSeconds,
-    volume: state.volume,
     queue: buildQueueEntries(state),
   };
 };
@@ -189,7 +184,6 @@ const clearAllChannelStates = (): void => {
 
 export {
   clearAllChannelStates,
-  DEFAULT_VOLUME,
   emptyPlayerStateSnapshot,
   enqueueTrack,
   formatSourceLabel,

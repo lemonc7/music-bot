@@ -6,6 +6,9 @@ type SearchResultsProps = {
   isBusy: boolean;
   canPlay: boolean;
   isPlaying: boolean;
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  onLoadMore: () => void;
   onSelect: (track: TuneBoxTrack) => void;
 };
 
@@ -14,6 +17,9 @@ const SearchResults = ({
   isBusy,
   canPlay,
   isPlaying,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
   onSelect,
 }: SearchResultsProps) => {
   if (tracks.length === 0) return null;
@@ -65,6 +71,17 @@ const SearchResults = ({
           );
         })}
       </ul>
+
+      {hasMore ? (
+        <button
+          type="button"
+          className="mb-load-more"
+          disabled={isLoadingMore}
+          onClick={onLoadMore}
+        >
+          {isLoadingMore ? "Loading..." : "Load more"}
+        </button>
+      ) : null}
     </div>
   );
 };

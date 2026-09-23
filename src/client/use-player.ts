@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import type {
   PlayerStateSnapshot,
   TSharkord,
+  TuneBoxProvider,
   TuneBoxTrack,
 } from "../contract";
 import { callAction, useCurrentVoiceChannelId } from "./store";
@@ -16,7 +17,6 @@ const EMPTY_PLAYER_STATE: PlayerStateSnapshot = {
   streamStarting: false,
   playbackStartedAtEpochMs: null,
   currentTrackDurationSeconds: null,
-  volume: 50,
   queue: [],
 };
 
@@ -68,7 +68,6 @@ const usePlayer = () => {
     playTrack: useCanUseAction<TSharkord>("playTuneBoxTrack"),
     skip: useCanUseAction<TSharkord>("nextMusic"),
     stop: useCanUseAction<TSharkord>("stopMusic"),
-    volume: useCanUseAction<TSharkord>("setVolume"),
     jump: useCanUseAction<TSharkord>("jumpToQueueItem"),
     remove: useCanUseAction<TSharkord>("removeQueueItem"),
   };
@@ -77,6 +76,12 @@ const usePlayer = () => {
   const [isBusy, setIsBusy] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<TuneBoxTrack[]>([]);
+  const [activeSearch, setActiveSearch] = useState<{
+    provider: TuneBoxProvider;
+    query: string;
+    page: number;
+    total: number;
+  } | null>(null);
 
   // the server pushes on every change, so nothing here polls
   usePush<TSharkord>(({ channelId, player: pushedPlayer }) => {
@@ -88,6 +93,7 @@ const usePlayer = () => {
   useEffect(() => {
     setError("");
     setSearchResults([]);
+    setActiveSearch(null);
 
     if (!currentVoiceChannelId) {
       setPlayer(EMPTY_PLAYER_STATE);
@@ -129,21 +135,86 @@ const usePlayer = () => {
     [],
   );
 
-  const search = useCallback(async (query: string) => {
+  const search = useCallback(
+    async (query: string, provider: TuneBoxProvider) => {
+      setIsSearching(true);
+
+      try {
+        const response = await callAction("searchTuneBox", {
+          provider,
+          query,
+          page: 1,
+        });
+
+        setSearchResults(response.tracks);
+        setActiveSearch({
+          provider,
+          query,
+          page: response.page,
+          total: response.total,
+        });
+        setError("");
+      } catch (err) {
+        setError(getErrorMessage(err));
+        setSearchResults([]);
+        setActiveSearch(null);
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [],
+  );
+
+  const loadMore = useCallback(async () => {
+    if (
+      !activeSearch ||
+      isSearching ||
+      searchResults.length >= activeSearch.total
+    ) {
+      return;
+    }
+
     setIsSearching(true);
 
     try {
-      const response = await callAction("searchTuneBox", { query });
+      const nextPage = activeSearch.page + 1;
+      const response = await callAction("searchTuneBox", {
+        provider: activeSearch.provider,
+        query: activeSearch.query,
+        page: nextPage,
+      });
 
-      setSearchResults(response.tracks);
+      setSearchResults((current) => {
+        const existing = new Set(
+          current.map((track) => `${track.provider}:${track.id}`),
+        );
+        const additions = response.tracks.filter((track) => {
+          const key = `${track.provider}:${track.id}`;
+
+          if (existing.has(key)) return false;
+
+          existing.add(key);
+          return true;
+        });
+
+        return [...current, ...additions];
+      });
+      setActiveSearch((current) =>
+        current
+          ? {
+              ...current,
+              page: Math.max(nextPage, response.page),
+              total: response.total,
+            }
+          : null,
+      );
       setError("");
     } catch (err) {
       setError(getErrorMessage(err));
-      setSearchResults([]);
     } finally {
       setIsSearching(false);
     }
-  }, []);
+  }, [activeSearch, isSearching, searchResults.length]);
 
   const elapsedSeconds = useElapsedSeconds(player);
   const duration = player.currentTrackDurationSeconds;
@@ -159,7 +230,10 @@ const usePlayer = () => {
     isBusy,
     isSearching,
     isDisconnected: !currentVoiceChannelId,
+    hasMoreSearchResults:
+      activeSearch !== null && searchResults.length < activeSearch.total,
 
+    loadMore,
     playTrack: (track: TuneBoxTrack) =>
       run(() => callAction("playTuneBoxTrack", { track })),
     player,
@@ -172,7 +246,6 @@ const usePlayer = () => {
       run(() => callAction("jumpToQueueItem", { position })),
     skip: () => run(() => callAction("nextMusic")),
     stop: () => run(() => callAction("stopMusic")),
-    setVolume: (volume: number) => run(() => callAction("setVolume", { volume })),
   };
 };
 

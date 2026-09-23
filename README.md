@@ -19,15 +19,13 @@ so the binary is only fetched once.
 Open the music player from the note icon in the top bar while you are connected
 to a voice channel:
 
-- **Search Tune Box** — shows matching songs with title, artist, album, and
-  artwork. Selecting a result plays it when the channel is idle or queues it
-  when something is already on.
+- **Search Tune Box** — choose NetEase or Kuwo, then search matching songs with
+  title, artist, album, and artwork. Use **Load more** to append the next page.
+  Selecting a result plays it when the channel is idle or queues it when
+  something is already on.
 - **Stop** — stops playback and clears the channel's playback state.
 - **Skip** — moves to the next queued track.
-- **Volume** — the master level everyone hears. ffmpeg bakes the level in when
-  a track starts, so a change applies from the next track on. To change what
-  *you* hear right now, use the volume control on the stream's card in the
-  voice channel, which Sharkord provides per listener.
+- Playback volume is controlled per listener through Sharkord's stream card.
 - Hover a queue row to play it immediately or drop it from the queue.
 
 ## Permissions
@@ -51,10 +49,9 @@ download leaves the working one untouched and playback is not interrupted.
 
 ## Tune Box integration
 
-Tune Box must expose `GET /api/v1/music/search` and `GET /api/preview`. The
-matching Tune Box change is included with this plugin integration. Configure a
-URL reachable from the Sharkord server process, not from the browser. For
-Docker deployments this is normally the Tune Box service name, for example
+Tune Box must expose `GET /api/search` and `GET /api/preview`. Configure a URL
+reachable from the Sharkord server process, not from the browser. For Docker
+deployments this is normally the Tune Box service name, for example
 `http://tune-box:8080`.
 
 The current MVP does not authenticate these endpoints, so keep Tune Box and
@@ -63,8 +60,8 @@ Sharkord on a trusted private network.
 ## Settings
 
 - **Tune Box Base URL** — Tune Box server URL (default `http://localhost:8080`).
-- **Tune Box Provider** — provider used for searches (default `netease`).
-- **Bitrate** — the audio bitrate for the stream (default `128k`).
+- **Bitrate** — the Opus bitrate sent to the voice channel (default `128k`).
+  This is independent of Tune Box's 320kbps MP3 preview quality.
 
 ## Screenshots
 
@@ -73,9 +70,9 @@ Sharkord on a trusted private network.
 ## Troubleshooting
 
 If search fails, verify that Sharkord can reach the configured Tune Box URL and
-that `GET /api/v1/music/search` responds. If a result cannot play, test the same
-provider and track ID through Tune Box's `GET /api/preview` endpoint and inspect
-both applications' logs.
+that `GET /api/search` responds. If a result cannot play, test the same provider
+and track ID through Tune Box's `GET /api/preview` endpoint and inspect both
+applications' logs.
 
 ## Development
 

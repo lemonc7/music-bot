@@ -1,14 +1,12 @@
 import { Button, Popover, PopoverContent, PopoverTrigger } from "@sharkord/ui";
-import type { CSSProperties } from "react";
-import { memo, useEffect, useState } from "react";
+import { memo, useState } from "react";
+import type { TuneBoxProvider } from "../contract";
 import {
-  MuteIcon,
   NoteIcon,
   PlayIcon,
   SearchIcon,
   SkipIcon,
   StopIcon,
-  VolumeIcon,
 } from "./icons";
 import { Queue } from "./queue";
 import { SearchResults } from "./search-results";
@@ -27,25 +25,23 @@ const PlayerPanel = ({ controller }: PlayerPanelProps) => {
     error,
     isBusy,
     isSearching,
+    hasMoreSearchResults,
     jumpTo,
+    loadMore,
     playTrack,
     player,
     progressPercent,
     remove,
     search,
     searchResults,
-    setVolume,
     skip,
     stop,
   } = controller;
   const [query, setQuery] = useState("");
-  // held locally while dragging, so the slider does not fight its own pushes
-  const [volume, setVolumeDraft] = useState(player.volume);
+  const [provider, setProvider] = useState<TuneBoxProvider>("netease");
 
   const addedBy = useUserName(player.currentInvokerUserId);
   const currentArtists = player.currentArtists.join(" / ");
-
-  useEffect(() => setVolumeDraft(player.volume), [player.volume]);
 
   const isPlaying = player.streamActive;
   const isLoading = player.streamStarting;
@@ -55,7 +51,7 @@ const PlayerPanel = ({ controller }: PlayerPanelProps) => {
   const submit = () => {
     if (!canSubmit) return;
 
-    search(query.trim());
+    search(query.trim(), provider);
   };
 
   const title = isPlaying
@@ -67,6 +63,19 @@ const PlayerPanel = ({ controller }: PlayerPanelProps) => {
   return (
     <div className="mb-panel">
       <div className="mb-search">
+        <select
+          className="mb-provider-select"
+          value={provider}
+          aria-label="Music provider"
+          disabled={!can.search || isSearching}
+          onChange={(event) =>
+            setProvider(event.target.value as TuneBoxProvider)
+          }
+        >
+          <option value="netease">网易云</option>
+          <option value="kuwo">酷我</option>
+        </select>
+
         <div className="mb-search-field">
           <SearchIcon />
           <input
@@ -164,24 +173,6 @@ const PlayerPanel = ({ controller }: PlayerPanelProps) => {
             <SkipIcon size={22} />
           </button>
         </div>
-
-        <div className="mb-volume">
-          {volume === 0 ? <MuteIcon /> : <VolumeIcon />}
-          <input
-            className="mb-volume-input"
-            type="range"
-            min={0}
-            max={100}
-            value={volume}
-            style={{ "--mb-volume": `${volume}%` } as CSSProperties}
-            aria-label="Master volume"
-            title={`Master volume ${volume}% — applies from the next track`}
-            disabled={!can.volume}
-            onChange={(event) => setVolumeDraft(Number(event.target.value))}
-            onPointerUp={() => setVolume(volume)}
-            onKeyUp={() => setVolume(volume)}
-          />
-        </div>
       </div>
 
       {error ? <div className="mb-note">{error}</div> : null}
@@ -191,6 +182,9 @@ const PlayerPanel = ({ controller }: PlayerPanelProps) => {
         isBusy={isBusy}
         canPlay={can.playTrack}
         isPlaying={isPlaying || isLoading}
+        hasMore={hasMoreSearchResults}
+        isLoadingMore={isSearching && searchResults.length > 0}
+        onLoadMore={loadMore}
         onSelect={playTrack}
       />
 

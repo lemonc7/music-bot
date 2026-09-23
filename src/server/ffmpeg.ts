@@ -13,11 +13,11 @@ type TMusicOptions = {
   audioSsrc: number;
   rtpHost: string;
   audioRtpPort: number;
-  volume?: number;
   bitrate?: string;
   log: (...messages: unknown[]) => void;
   error: (...messages: unknown[]) => void;
   debug: (...messages: unknown[]) => void;
+  onDuration?: (durationSeconds: number) => void;
   onEnd?: () => void;
 };
 
@@ -64,12 +64,31 @@ const readLines = async (
   }
 };
 
+const parseDurationSeconds = (line: string): number | null => {
+  const match = line.match(/Duration:\s*(\d+):(\d{2}):(\d{2}(?:\.\d+)?)/);
+
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = Number(match[3]);
+  const duration = hours * 3600 + minutes * 60 + seconds;
+
+  return Number.isFinite(duration) && duration > 0 ? duration : null;
+};
+
 const logFfmpegLine = (line: string, options: TMusicOptions): void => {
+  const durationSeconds = parseDurationSeconds(line);
+
+  if (durationSeconds !== null) options.onDuration?.(durationSeconds);
+
   if (/\[(error|fatal|panic)\]/.test(line)) {
     options.error("[FFmpeg]", line);
 
     return;
   }
+
+  if (/^\[info\]/.test(line)) return;
 
   options.log("[FFmpeg]", line);
 };
@@ -119,7 +138,6 @@ const spawnMusicStream = async (
   options: TMusicOptions,
 ): Promise<TMusicStreamResult> => {
   const ffmpegPath = getFfmpegBinaryPath();
-  const volumeLevel = Math.min(100, Math.max(0, options.volume ?? 100)) / 100;
   const audioBitrate = normalizeBitrate(options.bitrate);
 
   options.log("Using FFmpeg binary at:", ffmpegPath);
@@ -135,15 +153,13 @@ const spawnMusicStream = async (
     "-hide_banner",
     "-nostats",
     "-loglevel",
-    "level+warning",
+    "level+info",
     "-re",
     "-readrate_initial_burst",
     "0",
     "-i",
     options.sourceUrl,
     "-vn",
-    "-af",
-    `volume=${volumeLevel}`,
     "-c:a",
     "libopus",
     "-ar",

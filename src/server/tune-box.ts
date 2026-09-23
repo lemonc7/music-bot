@@ -80,7 +80,7 @@ const searchTuneBox = async (
   query: string,
   page = 1,
 ): Promise<TuneBoxSearchResult> => {
-  const url = new URL("/api/v1/music/search", normalizeBaseUrl(baseUrl));
+  const url = new URL("/api/search", normalizeBaseUrl(baseUrl));
 
   url.searchParams.set("provider", provider.trim());
   url.searchParams.set("q", query.trim());
@@ -88,13 +88,19 @@ const searchTuneBox = async (
   url.searchParams.set("limit", "20");
 
   const response = await fetch(url, {
+    headers: { Accept: "application/json" },
     signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
   });
 
   if (!response.ok) {
+    const contentType = response.headers.get("content-type") ?? "";
     const detail = (await response.text()).trim();
+    const message = contentType.includes("application/json")
+      ? detail
+      : `Tune Box search endpoint returned HTTP ${response.status}. Check that the server exposes /api/search.`;
+
     throw new Error(
-      detail || `Tune Box search failed with HTTP ${response.status}.`,
+      message || `Tune Box search failed with HTTP ${response.status}.`,
     );
   }
 
@@ -110,7 +116,13 @@ const searchTuneBox = async (
     throw new Error("Tune Box search response is too large.");
   }
 
-  const parsed = JSON.parse(body) as RawSearchResult;
+  let parsed: RawSearchResult;
+
+  try {
+    parsed = JSON.parse(body) as RawSearchResult;
+  } catch {
+    throw new Error("Tune Box search endpoint returned an invalid JSON response.");
+  }
   const tracks = Array.isArray(parsed.tracks)
     ? parsed.tracks
         .map(parseTrack)
