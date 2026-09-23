@@ -40,6 +40,8 @@ type PlaybackSettings = {
   bitrate: string;
 };
 
+const STREAM_TRANSITION_DELAY_MS = 500;
+
 let ffmpegReady = false;
 let ffmpegInitError: Error | null = null;
 
@@ -238,6 +240,11 @@ const startMusicStream = async (
         publishPlayerState(ctx, channelId);
       },
       onEnd: () => {
+        if (state.streamGeneration !== streamGeneration) {
+          ctx.logger.debug("Ignoring stale FFmpeg exit in channel", channelId);
+          return;
+        }
+
         ctx.logger.log("Music ended in channel", channelId);
 
         const queueHasItems = state.queue.length > 0;
@@ -249,9 +256,20 @@ const startMusicStream = async (
         cleanupChannel(ctx, channelId);
 
         if (shouldStartNext) {
-          playNextInQueue(ctx, channelId, options).catch((err: unknown) =>
-            ctx.logger.error("Failed to start the next track", err),
-          );
+          setTimeout(() => {
+            if (
+              state.streamGeneration !== streamGeneration ||
+              state.streamActive ||
+              state.streamStarting ||
+              state.endAction === "stop"
+            ) {
+              return;
+            }
+
+            playNextInQueue(ctx, channelId, options).catch((err: unknown) =>
+              ctx.logger.error("Failed to start the next track", err),
+            );
+          }, STREAM_TRANSITION_DELAY_MS);
         }
       },
     });
