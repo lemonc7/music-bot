@@ -134,6 +134,14 @@ const normalizeBitrate = (bitrate?: string): string => {
   return "192k";
 };
 
+const isValidBitrate = (bitrate?: string): boolean => {
+  const trimmed = bitrate?.trim();
+
+  return Boolean(
+    trimmed && (/^\d+(?:\.\d+)?k$/i.test(trimmed) || /^\d+$/.test(trimmed)),
+  );
+};
+
 const spawnMusicStream = async (
   options: TMusicOptions,
 ): Promise<TMusicStreamResult> => {
@@ -142,7 +150,7 @@ const spawnMusicStream = async (
 
   options.log("Using FFmpeg binary at:", ffmpegPath);
 
-  if (audioBitrate === "192k" && options.bitrate) {
+  if (options.bitrate && !isValidBitrate(options.bitrate)) {
     options.log(
       "Invalid bitrate setting, using default 192k:",
       options.bitrate,

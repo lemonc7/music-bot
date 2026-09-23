@@ -122,6 +122,13 @@ const assertFfmpegReady = async (): Promise<void> => {
   throw new Error("FFmpeg is still downloading. Try again in a moment.");
 };
 
+const getRtpDestinationHost = (listenIp: string): string => {
+  if (listenIp === "0.0.0.0") return "127.0.0.1";
+  if (listenIp === "::" || listenIp === "[::]") return "[::1]";
+
+  return listenIp;
+};
+
 const requireVoiceChannelId = (
   channelId: number | null | undefined,
   errorMessage: string,
@@ -178,6 +185,7 @@ const startMusicStream = async (
     router.on("@close", state.routerCloseHandler);
 
     const audioSsrc = Math.floor(Math.random() * 1e9);
+    const rtpHost = getRtpDestinationHost(ip);
 
     state.audioTransport = await router.createPlainTransport({
       listenIp: {
@@ -212,7 +220,7 @@ const startMusicStream = async (
       sourceUrl: track.sourceUrl,
       audioPayloadType: 111,
       audioSsrc,
-      rtpHost: ip,
+      rtpHost,
       audioRtpPort: state.audioTransport.tuple.localPort,
       bitrate: options.bitrate,
       log: ctx.logger.log,

@@ -94,11 +94,17 @@ jobs:
           sha256sum "${asset_name}" > "${asset_name}.sha256"
           echo "asset_name=${asset_name}" >> "${GITHUB_OUTPUT}"
 
+      - name: Prepare workflow artifact
+        run: |
+          rm -rf artifact
+          mkdir -p artifact
+          cp -R dist/music-bot artifact/music-bot
+
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: music-bot-${{ github.ref_name }}-build
-          path: dist
+          path: artifact
           if-no-files-found: error
 
       - name: Create GitHub Release
