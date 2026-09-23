@@ -1,5 +1,5 @@
 import { useCanUseAction, usePush } from "@sharkord/plugin-sdk/client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   PlayerStateSnapshot,
   TSharkord,
@@ -82,6 +82,15 @@ const usePlayer = () => {
     page: number;
     total: number;
   } | null>(null);
+  const searchGeneration = useRef(0);
+
+  const clearSearch = useCallback(() => {
+    searchGeneration.current += 1;
+    setIsSearching(false);
+    setSearchResults([]);
+    setActiveSearch(null);
+    setError("");
+  }, []);
 
   // the server pushes on every change, so nothing here polls
   usePush<TSharkord>(({ channelId, player: pushedPlayer }) => {
@@ -91,9 +100,7 @@ const usePlayer = () => {
   });
 
   useEffect(() => {
-    setError("");
-    setSearchResults([]);
-    setActiveSearch(null);
+    clearSearch();
 
     if (!currentVoiceChannelId) {
       setPlayer(EMPTY_PLAYER_STATE);
@@ -112,7 +119,7 @@ const usePlayer = () => {
     return () => {
       cancelled = true;
     };
-  }, [currentVoiceChannelId]);
+  }, [clearSearch, currentVoiceChannelId]);
 
   const run = useCallback(
     async (
@@ -137,6 +144,8 @@ const usePlayer = () => {
 
   const search = useCallback(
     async (query: string, provider: TuneBoxProvider) => {
+      const generation = ++searchGeneration.current;
+
       setIsSearching(true);
 
       try {
@@ -145,6 +154,8 @@ const usePlayer = () => {
           query,
           page: 1,
         });
+
+        if (searchGeneration.current !== generation) return;
 
         setSearchResults(response.tracks);
         setActiveSearch({
@@ -155,11 +166,13 @@ const usePlayer = () => {
         });
         setError("");
       } catch (err) {
+        if (searchGeneration.current !== generation) return;
+
         setError(getErrorMessage(err));
         setSearchResults([]);
         setActiveSearch(null);
       } finally {
-        setIsSearching(false);
+        if (searchGeneration.current === generation) setIsSearching(false);
       }
     },
     [],
@@ -174,6 +187,8 @@ const usePlayer = () => {
       return;
     }
 
+    const generation = searchGeneration.current;
+
     setIsSearching(true);
 
     try {
@@ -183,6 +198,8 @@ const usePlayer = () => {
         query: activeSearch.query,
         page: nextPage,
       });
+
+      if (searchGeneration.current !== generation) return;
 
       setSearchResults((current) => {
         const existing = new Set(
@@ -210,9 +227,11 @@ const usePlayer = () => {
       );
       setError("");
     } catch (err) {
+      if (searchGeneration.current !== generation) return;
+
       setError(getErrorMessage(err));
     } finally {
-      setIsSearching(false);
+      if (searchGeneration.current === generation) setIsSearching(false);
     }
   }, [activeSearch, isSearching, searchResults.length]);
 
@@ -233,6 +252,7 @@ const usePlayer = () => {
     hasMoreSearchResults:
       activeSearch !== null && searchResults.length < activeSearch.total,
 
+    clearSearch,
     loadMore,
     playTrack: (track: TuneBoxTrack) =>
       run(() => callAction("playTuneBoxTrack", { track })),

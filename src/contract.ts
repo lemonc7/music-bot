@@ -21,6 +21,7 @@ type PlayerQueueEntry = {
   label: string;
   title: string;
   artists: string[];
+  coverUrl: string | null;
   invokerUserId: number;
 };
 

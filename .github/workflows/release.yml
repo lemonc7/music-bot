@@ -97,10 +97,8 @@ jobs:
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.package.outputs.asset_name }}
-          path: |
-            ${{ steps.package.outputs.asset_name }}
-            ${{ steps.package.outputs.asset_name }}.sha256
+          name: music-bot-${{ github.ref_name }}-build
+          path: dist
           if-no-files-found: error
 
       - name: Create GitHub Release

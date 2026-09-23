@@ -139,6 +139,7 @@ const buildQueueEntries = (state: ChannelStreamState): PlayerQueueEntry[] =>
     label: formatTrackLabel(item.track),
     title: item.track.title?.trim() || formatSourceLabel(item.track.sourceUrl),
     artists: item.track.artists ?? [],
+    coverUrl: item.track.coverUrl ?? null,
     invokerUserId: item.invokerUserId,
   }));
 

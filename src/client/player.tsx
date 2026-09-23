@@ -157,7 +157,7 @@ const PlayerPanel = ({ controller }: PlayerPanelProps) => {
             disabled={isBusy || !isPlaying || !can.stop}
             onClick={stop}
           >
-            {isPlaying ? <StopIcon size={20} /> : <PlayIcon size={22} />}
+            {isPlaying ? <StopIcon size={18} /> : <PlayIcon size={20} />}
           </button>
 
           <button
@@ -170,7 +170,7 @@ const PlayerPanel = ({ controller }: PlayerPanelProps) => {
             }
             onClick={skip}
           >
-            <SkipIcon size={22} />
+            <SkipIcon size={20} />
           </button>
         </div>
       </div>
@@ -212,8 +212,14 @@ const Player = memo(() => {
   // nothing the panel could do: the whole button goes away
   if (controller.isDisconnected) return null;
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+
+    if (!nextOpen) controller.clearSearch();
+  };
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
@@ -227,7 +233,7 @@ const Player = memo(() => {
       </PopoverTrigger>
 
       <PopoverContent align="end" style={panelStyle}>
-        <PlayerPanel controller={controller} />
+        {open ? <PlayerPanel controller={controller} /> : null}
       </PopoverContent>
     </Popover>
   );

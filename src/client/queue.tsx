@@ -1,5 +1,5 @@
 import type { PlayerQueueEntry } from "../contract";
-import { CloseIcon, PlayIcon } from "./icons";
+import { CloseIcon, NoteIcon, PlayIcon } from "./icons";
 import { useUserName } from "./store";
 
 type QueueRowProps = {
@@ -24,11 +24,16 @@ const QueueRow = ({
 
   return (
     <li className="mb-row">
-      <div className="mb-row-lead">
-        <span className="mb-row-num">{item.position}</span>
+      <div className="mb-queue-art">
+        {item.coverUrl ? (
+          <img src={item.coverUrl} alt="" />
+        ) : (
+          <NoteIcon size={16} />
+        )}
+        <span className="mb-queue-position">{item.position}</span>
         <button
           type="button"
-          className="mb-ctrl mb-row-play"
+          className="mb-ctrl mb-queue-play"
           title="Play now"
           aria-label={`Play ${item.label} now`}
           disabled={isBusy || !canJump}
@@ -38,7 +43,7 @@ const QueueRow = ({
         </button>
       </div>
 
-      <div>
+      <div className="mb-row-copy">
         <div className="mb-row-label">{item.title}</div>
         {artists ? <div className="mb-row-meta">{artists}</div> : null}
         {addedBy ? <div className="mb-row-meta">Added by {addedBy}</div> : null}

@@ -51,11 +51,11 @@ const CSS = `
 .mb-add:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .mb-hero {
-  display: grid; grid-template-columns: 88px 1fr; gap: 14px;
-  align-items: center; padding: 4px 16px 12px;
+  display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 12px;
+  align-items: center; padding: 2px 16px 10px;
 }
 .mb-art {
-  width: 88px; height: 88px; border-radius: 8px; overflow: hidden;
+  width: 76px; height: 76px; border-radius: 8px; overflow: hidden;
   display: grid; place-items: center; background: #282828;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
@@ -88,9 +88,9 @@ const CSS = `
 
 .mb-controls {
   display: flex; justify-content: center; align-items: center;
-  padding: 12px 16px 16px;
+  padding: 8px 16px 10px;
 }
-.mb-transport { display: flex; align-items: center; gap: 24px; }
+.mb-transport { display: flex; align-items: center; gap: 20px; }
 .mb-ctrl {
   display: grid; place-items: center; padding: 4px; border: 0;
   background: transparent; color: #b3b3b3; cursor: pointer;
@@ -99,7 +99,7 @@ const CSS = `
 .mb-ctrl:hover:not(:disabled) { color: #fff; transform: scale(1.1); }
 .mb-ctrl:disabled { opacity: 0.35; cursor: not-allowed; }
 .mb-ctrl-main {
-  width: 48px; height: 48px; padding: 0; border-radius: 50%;
+  width: 40px; height: 40px; padding: 0; border-radius: 50%;
   background: #fff; color: #000;
 }
 .mb-ctrl-main:hover:not(:disabled) { color: #000; transform: scale(1.06); }
@@ -117,23 +117,41 @@ const CSS = `
 }
 .mb-section-count { font-size: 11px; color: #a7a7a7; }
 
-.mb-list { list-style: none; margin: 0; padding: 0; max-height: 216px; overflow-y: auto; }
+.mb-list {
+  list-style: none; margin: 0; padding: 0;
+  max-height: min(216px, 28dvh); overflow-y: auto; overscroll-behavior: contain;
+}
 .mb-list::-webkit-scrollbar { width: 8px; }
 .mb-list::-webkit-scrollbar-track { background: transparent; }
 .mb-list::-webkit-scrollbar-thumb { background: #4d4d4d; border-radius: 4px; }
 .mb-list::-webkit-scrollbar-thumb:hover { background: #6a6a6a; }
 
 .mb-row {
-  display: grid; grid-template-columns: 24px 1fr auto; gap: 10px;
-  align-items: center; padding: 7px 8px; border-radius: 6px;
+  display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 10px;
+  align-items: center; padding: 6px 8px; border-radius: 6px;
   transition: background 0.15s ease;
 }
 .mb-row:hover, .mb-row:focus-within { background: #1f1f1f; }
-.mb-row-lead { display: grid; place-items: center; height: 20px; }
-.mb-row-num { font-size: 12px; color: #a7a7a7; font-variant-numeric: tabular-nums; }
-.mb-row:hover .mb-row-num, .mb-row:focus-within .mb-row-num { display: none; }
-.mb-row-play { display: none; }
-.mb-row:hover .mb-row-play, .mb-row:focus-within .mb-row-play { display: grid; }
+.mb-row-copy { min-width: 0; }
+.mb-queue-art {
+  position: relative; width: 38px; height: 38px; overflow: hidden;
+  display: grid; place-items: center; border-radius: 5px;
+  background: #282828; color: #6a6a6a;
+}
+.mb-queue-art img { width: 100%; height: 100%; object-fit: cover; }
+.mb-queue-position {
+  position: absolute; right: 2px; bottom: 2px; min-width: 16px; height: 16px;
+  padding: 0 4px; display: grid; place-items: center; border-radius: 999px;
+  background: rgba(0, 0, 0, 0.76); color: #fff; font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+.mb-queue-play {
+  position: absolute; inset: 0; display: none; place-items: center;
+  width: 100%; height: 100%; border-radius: 5px;
+  background: rgba(0, 0, 0, 0.68); color: #fff;
+}
+.mb-row:hover .mb-queue-position, .mb-row:focus-within .mb-queue-position { display: none; }
+.mb-row:hover .mb-queue-play, .mb-row:focus-within .mb-queue-play { display: grid; }
 .mb-row-label {
   min-width: 0; font-size: 13px; line-height: 1.3; overflow-wrap: anywhere;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
@@ -184,6 +202,18 @@ const CSS = `
 }
 @keyframes mb-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
+@media (max-height: 720px) {
+  .mb-search { padding-block: 8px; }
+  .mb-hero {
+    grid-template-columns: 64px minmax(0, 1fr); gap: 10px;
+    padding-bottom: 8px;
+  }
+  .mb-art { width: 64px; height: 64px; }
+  .mb-controls { padding-block: 6px 8px; }
+  .mb-section { padding-top: 8px; padding-bottom: 8px; }
+  .mb-list { max-height: 24dvh; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mb-dot, .mb-panel *, .mb-panel *::before, .mb-panel *::after {
     animation-duration: 0.01ms !important; transition-duration: 0.01ms !important;
@@ -208,7 +238,10 @@ const panelStyle: CSSProperties = {
   border: "1px solid #2a2a2a",
   borderRadius: 14,
   background: "linear-gradient(180deg, #1c2a20 0%, #141414 38%, #121212 100%)",
-  overflow: "hidden",
+  maxHeight: "calc(100dvh - 24px)",
+  overflowX: "hidden",
+  overflowY: "auto",
+  overscrollBehavior: "contain",
 };
 
 export { ACCENT, panelStyle };
