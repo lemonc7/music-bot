@@ -38,7 +38,7 @@ const PlayerPanel = ({ controller }: PlayerPanelProps) => {
     stop,
   } = controller;
   const [query, setQuery] = useState("");
-  const [provider, setProvider] = useState<TuneBoxProvider>("netease");
+  const [provider, setProvider] = useState<TuneBoxProvider>("kuwo");
 
   const addedBy = useUserName(player.currentInvokerUserId);
   const currentArtists = player.currentArtists.join(" / ");
